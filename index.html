@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>板块资金流向实时监控</title>
+<!-- 引入ECharts -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:微软雅黑}
+body{padding:10px;background:#f5f5f5}
+h2{text-align:center;margin:15px 0;color:#333}
+#heatmap{width:100%;height:400px;margin-bottom:20px;background:#fff;border-radius:8px}
+#bar{width:100%;height:400px;margin-bottom:20px;background:#fff;border-radius:8px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden}
+th,td{padding:10px;text-align:center;border:1px solid #eee;font-size:14px}
+th{background:#409EFF;color:#fff}
+.red{color:#f53f3f}
+.green{color:#00b42a}
+</style>
+</head>
+<body>
+<h2>📈 A股行业板块主力资金实时流向</h2>
+<!-- 热力图：红=净流入，绿=净流出 -->
+<div id="heatmap"></div>
+<!-- 柱状图：主力净流入排行 -->
+<div id="bar"></div>
+<!-- 数据表格 -->
+<table>
+  <tr><th>板块名称</th><th>涨跌幅</th><th>主力净流入(亿)</th></tr>
+  <tbody id="table-body"></tbody>
+</table>
+
+<script>
+// 初始化图表
+const heatChart = echarts.init(document.getElementById('heatmap'));
+const barChart = echarts.init(document.getElementById('bar'));
+const tableBody = document.getElementById('table-body');
+
+// 获取东财板块资金数据
+async function getFundData(){
+  const url = "https://push2.eastmoney.com/api/qt/clist/get?fid=f62&po=1&pz=100&pn=1&np=1&fltt=2&invt=2&ut=b2884a393a59ad64002292a3e90d46a5&fs=m:90+t:2&fields=f12,f14,f2,f3,f62,f184,f66,f69,f72";
+  const res = await fetch(url);
+  const json = await res.json();
+  const list = json.data.diff;
+  
+  // 过滤有效数据，单位转亿
+  const data = list.filter(item=>item.f62).map(item=>({
+    name:item.f14,
+    change:item.f2,
+    fund:item.f62/100000000
+  })).sort((a,b)=>b.fund - a.fund);
+
+  renderChart(data);
+  renderTable(data);
+}
+
+// 渲染图表
+function renderChart(data){
+  // 热力图
+  heatChart.setOption({
+    tooltip:{trigger:'item'},
+    visualMap:{min:-50,max:50,inRange:{color:['#00b42a','#fff','#f53f3f']}},
+    series:[{type:'treemap',data:data.map(d=>({name:d.name,value:Math.abs(d.fund),fund:d.fund}))}]
+  });
+  // 柱状图（取前20）
+  barChart.setOption({
+    tooltip:{trigger:'axis'},
+    xAxis:{type:'category',data:data.slice(0,20).map(d=>d.name),axisLabel:{rotate:45}},
+    yAxis:{type:'value',name:'净流入(亿)'},
+    series:[{type:'bar',data:data.slice(0,20).map(d=>d.fund),itemStyle:{color:d=>d.data>0?'#f53f3f':'#00b42a'}}]
+  })
+}
+
+// 渲染表格
+function renderTable(data){
+  tableBody.innerHTML = data.map(d=>`
+    <tr>
+      <td>${d.name}</td>
+      <td class="${d.change>0?'red':'green'}">${d.change}%</td>
+      <td class="${d.fund>0?'red':'green'}">${d.fund.toFixed(2)}</td>
+    </tr>
+  `).join('')
+}
+
+// 60秒自动刷新
+getFundData();
+setInterval(getFundData,60000);
+</script>
+</body>
+</html>
